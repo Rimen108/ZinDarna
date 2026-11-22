@@ -1,3 +1,4 @@
+
 package com.zindarna.projectservice.service;
 
 import com.zindarna.projectservice.enums.ProductSelectionStatus;
@@ -8,11 +9,12 @@ import com.zindarna.projectservice.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
 import com.zindarna.projectservice.model.Project;
 import org.springframework.web.multipart.MultipartFile;
+
 import java.io.IOException;
 import java.util.ArrayList;
-
 import java.time.LocalDateTime;
 import java.util.List;
+
 import com.zindarna.projectservice.exception.ResourceNotFoundException;
 import com.zindarna.projectservice.exception.BadRequestException;
 
@@ -27,6 +29,8 @@ public class ProjectService {
         this.projectRepository = projectRepository;
         this.photoService = photoService;
     }
+
+    // Créer un projet
     public Project createProject(Project project) {
 
         project.setCreatedAt(LocalDateTime.now());
@@ -38,18 +42,37 @@ public class ProjectService {
 
         return projectRepository.save(project);
     }
+
+    // Récupérer les projets d'un utilisateur
     public List<Project> getProjectsByUser(String userId) {
         return projectRepository.findByUserId(userId);
     }
+
+    // Récupérer un projet en vérifiant son propriétaire
+    public Project getProjectById(String projectId, String userId) {
+
+        Project project = getProjectById(projectId);
+
+        if (!userId.equals(project.getUserId())) {
+            throw new ResourceNotFoundException("Projet introuvable.");
+        }
+
+        return project;
+    }
+
+    // Récupérer un projet par son ID
     public Project getProjectById(String projectId) {
         return projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Projet introuvable avec l'identifiant : " + projectId
                 ));
     }
-    public Project updateProject(String projectId, Project updatedProject) {
 
-        Project existingProject = getProjectById(projectId);
+    // Modifier un projet
+    public Project updateProject(String projectId, String userId,
+                                 Project updatedProject) {
+
+        Project existingProject = getProjectById(projectId, userId);
 
         existingProject.setName(updatedProject.getName());
         existingProject.setDescription(updatedProject.getDescription());
@@ -65,9 +88,11 @@ public class ProjectService {
 
         return projectRepository.save(existingProject);
     }
-    public void deleteProject(String projectId) {
 
-        Project project = getProjectById(projectId);
+    // Supprimer un projet
+    public void deleteProject(String projectId, String userId) {
+
+        Project project = getProjectById(projectId, userId);
 
         if (project.getRoomPhotos() != null) {
             for (RoomPhoto photo : project.getRoomPhotos()) {
@@ -77,10 +102,12 @@ public class ProjectService {
 
         projectRepository.delete(project);
     }
-    public Project addPhotoToProject(String projectId, MultipartFile file)
-            throws IOException {
 
-        Project project = getProjectById(projectId);
+    // Ajouter une photo
+    public Project addPhotoToProject(String projectId, String userId,
+                                     MultipartFile file) throws IOException {
+
+        Project project = getProjectById(projectId, userId);
 
         String photoId = photoService.uploadPhoto(file);
 
@@ -96,14 +123,16 @@ public class ProjectService {
         }
 
         project.getRoomPhotos().add(roomPhoto);
-
         project.setUpdatedAt(LocalDateTime.now());
 
         return projectRepository.save(project);
     }
-    public Project deletePhotoFromProject(String projectId, String photoId) {
 
-        Project project = getProjectById(projectId);
+    // Supprimer une photo
+    public Project deletePhotoFromProject(String projectId, String userId,
+                                          String photoId) {
+
+        Project project = getProjectById(projectId, userId);
 
         if (project.getRoomPhotos() == null) {
             throw new ResourceNotFoundException(
@@ -118,17 +147,19 @@ public class ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Photo introuvable dans ce projet."
                 ));
+
         photoService.deletePhoto(photoId);
-
         project.getRoomPhotos().remove(photoToDelete);
-
         project.setUpdatedAt(LocalDateTime.now());
 
         return projectRepository.save(project);
     }
-    public Project addProductToProject(String projectId, String productId) {
 
-        Project project = getProjectById(projectId);
+    // Ajouter un produit
+    public Project addProductToProject(String projectId, String userId,
+                                       String productId) {
+
+        Project project = getProjectById(projectId, userId);
 
         if (project.getSelectedProducts() == null) {
             project.setSelectedProducts(new ArrayList<>());
@@ -138,9 +169,11 @@ public class ProjectService {
                 .stream()
                 .anyMatch(product -> product.getProductId().equals(productId));
 
-        if (alreadyExists) throw new BadRequestException(
-                "Ce produit existe déjà dans le projet."
-        );
+        if (alreadyExists) {
+            throw new BadRequestException(
+                    "Ce produit existe déjà dans le projet."
+            );
+        }
 
         SelectedProduct selectedProduct = new SelectedProduct(
                 productId,
@@ -150,17 +183,17 @@ public class ProjectService {
         );
 
         project.getSelectedProducts().add(selectedProduct);
-
         project.setUpdatedAt(LocalDateTime.now());
 
         return projectRepository.save(project);
     }
-    public Project updateProductStatus(
-            String projectId,
-            String productId,
-            ProductSelectionStatus newStatus) {
 
-        Project project = getProjectById(projectId);
+    // Modifier le statut d'un produit
+    public Project updateProductStatus(String projectId, String userId,
+                                       String productId,
+                                       ProductSelectionStatus newStatus) {
+
+        Project project = getProjectById(projectId, userId);
 
         if (project.getSelectedProducts() == null) {
             throw new ResourceNotFoundException(
@@ -175,15 +208,18 @@ public class ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Produit introuvable dans ce projet."
                 ));
-        selectedProduct.setStatus(newStatus);
 
+        selectedProduct.setStatus(newStatus);
         project.setUpdatedAt(LocalDateTime.now());
 
         return projectRepository.save(project);
     }
-    public Project removeProductFromProject(String projectId, String productId) {
 
-        Project project = getProjectById(projectId);
+    // Supprimer un produit
+    public Project removeProductFromProject(String projectId, String userId,
+                                            String productId) {
+
+        Project project = getProjectById(projectId, userId);
 
         if (project.getSelectedProducts() == null) {
             throw new ResourceNotFoundException(
@@ -204,9 +240,11 @@ public class ProjectService {
 
         return projectRepository.save(project);
     }
-    public List<RoomPhoto> getProjectPhotos(String projectId) {
 
-        Project project = getProjectById(projectId);
+    // Récupérer les photos d'un projet
+    public List<RoomPhoto> getProjectPhotos(String projectId, String userId) {
+
+        Project project = getProjectById(projectId, userId);
 
         if (project.getRoomPhotos() == null) {
             return new ArrayList<>();
